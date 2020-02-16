@@ -21,15 +21,15 @@ class MyClass
     public:
         MyClass() {}    //<-- Default constructor is necessary for deserialization.
 
-		void Serialize(CJSON &json) const
-		{
-			json.AddPair("name", m_Name);
-		}
+        void Serialize(CJSON &json) const
+        {
+            json.AddPair("name", m_Name);
+        }
 
-		void Deserialize(CJSON &json)
-		{
-			m_Name = json.GetValue<string>("name");
-		}
+        void Deserialize(CJSON &json)
+        {
+            m_Name = json.GetValue<string>("name");
+        }
 
         void SetName(string Name)
         {
