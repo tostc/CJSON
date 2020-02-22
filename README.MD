@@ -54,7 +54,7 @@ int main()
     cout << json.Serialize(my1) << endl;
     // Expected output '{"name":"Peter"}'
 
-    MyClass my2 = json.Deserialize("{\"name\":\"Peter\"}");
+    MyClass my2 = json.Deserialize<MyClass>("{\"name\":\"Peter\"}");
     cout << my2.GetName() << endl;
     // Expected output 'Peter'
 
