@@ -705,7 +705,7 @@ class CJSON
                 }
 
                 // If key and value is set save it for later use.
-                if(!Key.empty() && !Value.empty())
+                if(KeyValueValid)
                 {
                     ValAllowed = false;
                     m_Values[Key] = Value;
