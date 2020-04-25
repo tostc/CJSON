@@ -195,6 +195,7 @@ class CJSON
         inline std::string Serialize(const T &obj)
         {
             static_assert(std::is_class<T>::value, "Please use structs or objects!");
+            m_Values.clear();
 
             obj.Serialize(*this);
             std::string Ret;
@@ -223,6 +224,7 @@ class CJSON
         template<class T, typename std::enable_if<!is_pointer_type<T>::value && has_begin_end<T>::value && !std::is_same<T, std::string>::value>::type* = nullptr>
         inline std::string Serialize(const T &obj)
         {
+            m_Values.clear();
             return ValueToString(obj);
         }
 
@@ -255,6 +257,7 @@ class CJSON
         inline std::string Serialize(const T obj)
         {
             static_assert(std::is_class<typename std::remove_pointer<T>::type>::value, "Please use structs or objects!");
+            m_Values.clear();
 
             obj->Serialize(*this);
             std::string Ret;
@@ -269,6 +272,41 @@ class CJSON
 
             m_Values.clear();
             return '{' + Ret + '}';
+        }
+
+        /**
+         * @brief Deserializes a json object to a already existing object.
+         * 
+         * To deserialize a json object you need to implement a Deserialize method.
+         * @code
+         *      class YourClass
+         *      {
+         *          public:
+         *              ...
+         *              void Deserialize(CJSON &json)
+         *              {
+         *                  ...
+         *                  m_YourAttr = json.GetValue<std::string>("yourAttr");   //Gets the value of a json key.
+         *                  ...
+         *              }
+         *              ...
+         *      };
+         * @endcode
+         * 
+         * @param json: JSON for deserialization.
+         * @param Obj: Object wich will receive the data.
+         * 
+         * @throw CJSONException If any error occurres.
+         */
+        template<class T, typename std::enable_if<!is_map<T>::value && !is_multimap<T>::value && !has_begin_end<T>::value>::type* = nullptr>
+        inline void Deserialize(const std::string &json, T *Obj)
+        {
+            static_assert(std::is_class<typename pointer_type<T>::type>::value, "Please use structs or objects!");
+
+            ParseObject(json);
+
+            Obj->Deserialize(*this);
+            m_Values.clear();
         }
 
         /**
@@ -419,149 +457,16 @@ class CJSON
         }
 
         /**
-         * @brief Adds a new value to the json.
-         * 
-         * @param Name: Name of the value in the json file.
-         * @param val: Value of the json value.
-         * 
-         * @note You can add any type. It can be primitive, pointer, object or container types. The object type need to implement the Serialize method.
-         * @throw CJSONException If any error occurres.
-         */
-        template<class T>
-        inline void AddPair(const std::string &Name, const T &val)
-        {
-            if(m_Values.find(Name) != m_Values.end())
-                throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);
-
-            m_Values[Name] = ValueToString(val); 
-        }
-
-        /**
-         * @brief Adds a new primitive array to the json.
-         * 
-         * @param Name: Name of the array in the json file.
-         * @param val: Value of the json array.
-         * @param Size: Size of the array.
-         * 
-         * @note You can add any type. It can be primitive or object array types. The object type need to implement the Serialize method.
-         * @throw CJSONException If any error occurres.
-         */
-        template<class T>
-        inline void AddPair(const std::string &Name, const T &val, size_t Size)
-        {
-            if(m_Values.find(Name) != m_Values.end())
-                throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);         
-
-            m_Values[Name] = '[' + ArrayToStr(val, Size) + ']'; 
-        }
-
-        /**
-         * @brief Gets the value for a given name.
-         * 
-         * @param Name: Name of the value.
-         * @param Default: Default value if the given value doesn't exists.
-         * 
-         * @note For primitive, pointer, std::string and container types.
-         * 
-         * @return Returns the requested value.
-         * @throw CJSONException If any error occurres.
-         */
-        template<class T, typename std::enable_if<!std::is_class<typename std::remove_pointer<T>::type>::value || std::is_same<T, std::string>::value || has_push_back<T>::value>::type* = nullptr>
-        T GetValue(const std::string &Name, const T &Default = T())
-        {
-            std::map<std::string, std::string>::iterator IT = m_Values.find(Name);
-            if(IT == m_Values.end())
-                return Default;
-
-            if(IT->second == "null")
-                return AddNullObj<T>();
-
-            return ParseValue<T>(IT->second);
-        }
-
-        /**
-         * @brief Gets the value for a given name.
-         * 
-         * @param Name: Name of the value.
-         * 
-         * @note For objects.
-         * 
-         * @return Returns the requested object.
-         * @throw CJSONException If any error occurres.
-         */
-        template<class T, typename std::enable_if<std::is_class<typename pointer_type<T>::type>::value && !std::is_same<T, std::string>::value && !has_push_back<T>::value>::type* = nullptr>
-        T GetValue(const std::string &Name)
-        {
-            std::map<std::string, std::string>::iterator IT = m_Values.find(Name);
-            if(IT == m_Values.end())
-                throw CJSONException("Name '" + Name + "' not found", JSONErrorType::NAME_NOT_FOUND); 
-
-            if(IT->second == "null")
-                return AddNullObj<T>();
-
-            CJSON json;
-            return json.Deserialize<T>(IT->second);
-        }
-
-        /**
-         * @brief Gets the value for a given array.
-         * 
-         * @param Name: Name of the array.
-         * @param[out] Size: The size of the array.
-         * 
-         * @return Returns a primitive array.
-         * @throw CJSONException If any error occurres.
-         */
-        template<class T>
-        T GetValue(const std::string &Name, size_t &Size)
-        {
-            std::map<std::string, std::string>::iterator IT = m_Values.find(Name);
-            if(IT == m_Values.end())
-            {
-                Size = 0;
-                return nullptr;
-            }
-
-            if(IT->second == "null")
-            {
-                Size = 0;
-                return AddNullObj<T>();
-            }
-
-            return ParseArray<T>(IT->second, Size);
-        }
-
-
-        ~CJSON() {}
-
-    private:
-        std::map<std::string, std::string> m_Values;
-
-        /**-----------------------------------------Blackmagic for SFINAE-----------------------------------------**/
-
-        /** Creates a std::shared_ptr **/
-        template<class T, typename std::enable_if<is_shared_ptr<T>::value>::type* = nullptr>
-        inline T CreatePointer()
-        {
-            return T(new typename pointer_type<T>::type());
-        }
-
-        /** Creates a primitive pointer **/
-        template<class T, typename std::enable_if<std::is_pointer<T>::value>::type* = nullptr>
-        inline T CreatePointer()
-        {
-            return new typename pointer_type<T>::type();
-        }
-
-        /**
          * @brief Parses a given json object.
          * 
          * @param obj: JSON object string.
+         * @note You can access each value via @see GetValue.
          * 
          * @throw CJSONException If any error occurres.
          */
         inline void ParseObject(const std::string &obj)
         {
+            m_Values.clear();
             std::string Key, Value;
             bool ValAllowed = false;
             bool KeyValueValid = false;
@@ -722,6 +627,141 @@ class CJSON
                 throw CJSONException(JSONErrorType::INVALID_JSON_OBJECT);
         }
 
+        /**
+         * @brief Adds a new value to the json.
+         * 
+         * @param Name: Name of the value in the json file.
+         * @param val: Value of the json value.
+         * 
+         * @note You can add any type. It can be primitive, pointer, object or container types. The object type need to implement the Serialize method.
+         * @throw CJSONException If any error occurres.
+         */
+        template<class T>
+        inline void AddPair(const std::string &Name, const T &val)
+        {
+            if(m_Values.find(Name) != m_Values.end())
+                throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);
+
+            m_Values[Name] = ValueToString(val); 
+        }
+
+        /**
+         * @brief Adds a new primitive array to the json.
+         * 
+         * @param Name: Name of the array in the json file.
+         * @param val: Value of the json array.
+         * @param Size: Size of the array.
+         * 
+         * @note You can add any type. It can be primitive or object array types. The object type need to implement the Serialize method.
+         * @throw CJSONException If any error occurres.
+         */
+        template<class T>
+        inline void AddPair(const std::string &Name, const T &val, size_t Size)
+        {
+            if(m_Values.find(Name) != m_Values.end())
+                throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);         
+
+            m_Values[Name] = '[' + ArrayToStr(val, Size) + ']'; 
+        }
+
+        /**
+         * @brief Gets the value for a given name.
+         * 
+         * @param Name: Name of the value.
+         * @param Default: Default value if the given value doesn't exists.
+         * 
+         * @note For primitive, pointer, std::string and container types.
+         * 
+         * @return Returns the requested value.
+         * @throw CJSONException If any error occurres.
+         */
+        template<class T, typename std::enable_if<!std::is_class<typename std::remove_pointer<T>::type>::value || std::is_same<T, std::string>::value || has_push_back<T>::value>::type* = nullptr>
+        T GetValue(const std::string &Name, const T &Default = T())
+        {
+            std::map<std::string, std::string>::iterator IT = m_Values.find(Name);
+            if(IT == m_Values.end())
+                return Default;
+
+            if(IT->second == "null")
+                return AddNullObj<T>();
+
+            return ParseValue<T>(IT->second);
+        }
+
+        /**
+         * @brief Gets the value for a given name.
+         * 
+         * @param Name: Name of the value.
+         * 
+         * @note For objects.
+         * 
+         * @return Returns the requested object.
+         * @throw CJSONException If any error occurres.
+         */
+        template<class T, typename std::enable_if<std::is_class<typename pointer_type<T>::type>::value && !std::is_same<T, std::string>::value && !has_push_back<T>::value>::type* = nullptr>
+        T GetValue(const std::string &Name)
+        {
+            std::map<std::string, std::string>::iterator IT = m_Values.find(Name);
+            if(IT == m_Values.end())
+                throw CJSONException("Name '" + Name + "' not found", JSONErrorType::NAME_NOT_FOUND); 
+
+            if(IT->second == "null")
+                return AddNullObj<T>();
+
+            CJSON json;
+            return json.Deserialize<T>(IT->second);
+        }
+
+        /**
+         * @brief Gets the value for a given array.
+         * 
+         * @param Name: Name of the array.
+         * @param[out] Size: The size of the array.
+         * 
+         * @return Returns a primitive array.
+         * @throw CJSONException If any error occurres.
+         */
+        template<class T>
+        T GetValue(const std::string &Name, size_t &Size)
+        {
+            std::map<std::string, std::string>::iterator IT = m_Values.find(Name);
+            if(IT == m_Values.end())
+            {
+                Size = 0;
+                return nullptr;
+            }
+
+            if(IT->second == "null")
+            {
+                Size = 0;
+                return AddNullObj<T>();
+            }
+
+            return ParseArray<T>(IT->second, Size);
+        }
+
+
+        ~CJSON() {}
+
+    private:
+        std::map<std::string, std::string> m_Values;
+
+        /**-----------------------------------------Blackmagic for SFINAE-----------------------------------------**/
+
+        /** Creates a std::shared_ptr **/
+        template<class T, typename std::enable_if<is_shared_ptr<T>::value>::type* = nullptr>
+        inline T CreatePointer()
+        {
+            return T(new typename pointer_type<T>::type());
+        }
+
+        /** Creates a primitive pointer **/
+        template<class T, typename std::enable_if<std::is_pointer<T>::value>::type* = nullptr>
+        inline T CreatePointer()
+        {
+            return new typename pointer_type<T>::type();
+        }
+
         // Validates the json bool.
         inline std::string ParseBool(const char *&beg, const char *&end)
         {
@@ -848,6 +888,53 @@ class CJSON
             return UnescapeString(Ret);
         }
 
+        inline int IsUTF8(unsigned char c)
+        {
+            if((c & 0xF0) == 0xF0)
+                return 3;
+            if((c & 0xE0) == 0xE0)
+                return 2;
+            if((c & 0xC0) == 0xC0)
+                return 1;
+
+            return 0;
+        }
+
+        inline int UTF8BitShift(unsigned char c)
+        {
+            if((c & 0xF0) == 0xF0)
+                return 5;
+            if((c & 0xE0) == 0xE0)
+                return 4;
+            if((c & 0xC0) == 0xC0)
+                return 3;
+            if((c & 0x80) == 0x80)
+                return 2;
+
+            return 0;
+        }
+
+        inline uint8_t UTF8Header(uint32_t UTF32)
+        {
+            if(UTF32 >= 0x80 && UTF32 <= 0x7FF)
+                return 0xC0;
+            if(UTF32 >= 0x800 && UTF32 <= 0xFFFF)
+                return 0xE0;
+            if(UTF32 >= 0x10000 && UTF32 <= 0x10FFFF)
+                return 0xF0;
+
+            return 0;
+        }
+
+        inline std::string NumToHexStr(uint32_t Num)
+        {
+            size_t Len = sizeof(uint32_t) * 2 + 1;
+            char *Buf = new char[Len];
+            Len = snprintf(Buf, Len, "%0*x", Len - 1, Num);
+
+            return std::string(Buf, Buf + Len);
+        }
+
         // Escapes a string.
         inline std::string EscapeString(std::string str)
         {
@@ -860,7 +947,102 @@ class CJSON
             str = ReplaceAll(str, "\r", "\\r");
             str = ReplaceAll(str, "\t", "\\t");
 
+            //UTF-8 decoding.
+            for(size_t i = 0; i < str.size(); i++)
+            {
+                int Bytes = IsUTF8(str[i]);
+                if(Bytes)
+                {
+                    int FreeBits = UTF8BitShift(str[i]);
+                    uint8_t Buf[sizeof(uint32_t)] = {0};
+                    Buf[Bytes] = str[i] & (0xFF >> FreeBits);
+
+                    size_t Counter = 0;
+
+                    for (; Counter < Bytes; Counter++)
+                    {
+                        size_t Pos = i + Counter + 1;
+                        if(Pos >= str.size())   //End of string?
+                            break;
+
+                        int ShiftBits = UTF8BitShift(str[Pos]);
+                        if(ShiftBits != 2)  //All second Bytes needs to begin with 10xxxxxx, otherwise its not utf-8.
+                            break;
+
+                        uint8_t c = str[Pos] & (0xFF >> ShiftBits);
+                        Buf[Bytes - (Counter + 1)] = c;
+                    }
+
+                    //We have valid UTF8
+                    if(Counter == Bytes)
+                    {
+                        uint32_t UTF32 = 0;
+                        uint8_t Shift = 6;
+
+                        for(char i = 0; i < Bytes; i++)
+                        {
+                            //ä - xxx00011 xx100100
+                            //𝄞 - xxxxx000 xx011101 xx000100 xx011110
+
+                            //1 - << 6
+                            //ä - xxx000xx 11100100
+                            //xxx000xx >> 2 - xxxxx000 11100100
+                            //End
+
+
+
+                            //1 - << 6
+                            //𝄞 - xxxxx000 xx011101 xx0001xx 00011110
+                            //xx0001xx >> 2 - xxxxx000 xx011101 xxxx0001 00011110
+
+                            //2 - << 4
+                            //𝄞 - xxxxx000 xx01xxxx 11010001 00011110
+                            //xx01xxxx >> 4 - xxxxx000 xxxxxx01 11010001 00011110
+
+                            //3 - << 2
+                            //𝄞 - xxxxxxxx xxx00001 11010001 00011110
+                            //End
+
+                            //i = xx100100
+
+                            uint8_t Carry = (Buf[i + 1] & ((0x4 << i * 2) - 1));
+        
+                            UTF32 |= (Buf[i] | (Carry << Shift)) << (8 * i);
+                            Buf[i + 1] >>= i * 2 + 2;
+
+                            Shift -= 2;
+
+                            // UTF32 |= (Buf[i] | ((Buf[i + 1] & ((0x4 << i * 2) - 1)) << ((Bytes + 1 - i) * 2))) << (8 * i);
+                            // Buf[i + 1] >>= i * 2 + 2;
+                        }
+
+                        UTF32 |= Buf[Bytes] << (8 * Bytes);
+
+                        std::string Encode = "\\u" + NumToHexStr(UTF32);
+                        str.erase(i, Bytes + 1);
+                        str.insert(i, Encode);
+                        i += Encode.size() - 1;
+                    }
+                }
+            }
+
             return str;
+        }
+
+        inline uint32_t ExtractUTF32(const std::string &str, size_t Pos, int &Len)
+        {
+            std::string Buf;
+
+            for (Len = 0; Len < sizeof(uint32_t) * 2; Len++)
+            {
+                if(!isxdigit(str[Pos]))
+                    break;
+
+                Buf = Buf + str[Pos];
+                Pos++;
+            }
+
+            return (uint32_t)std::stoi(Buf, nullptr, 16);
         }
 
         // Unescapes a json string.
@@ -874,6 +1056,48 @@ class CJSON
             str = ReplaceAll(str, "\\f", "\f");
             str = ReplaceAll(str, "\\r", "\r");
             str = ReplaceAll(str, "\\t", "\t");
+
+            //UTF-8 encoding.
+            size_t Pos = -1;
+            do
+            {
+                Pos = str.find("\\u", Pos + 1);
+                if(Pos != std::string::npos)
+                {
+                    int Len = 0;
+                    uint32_t UTF32 = ExtractUTF32(str, Pos + 2, Len);
+                    uint8_t Header = UTF8Header(UTF32);
+                    uint8_t *UTF32Ptr = (uint8_t*)&UTF32;
+                    int Bytes = IsUTF8(Header);
+                    uint8_t Carry = 0;
+
+                    if(Bytes)
+                    {
+                        for (int i = 0; i < Bytes + 1; i++)
+                        {
+                            uint8_t OldCarry = Carry; 
+                            uint8_t OldShift = 8 - (i * 2 + 2);
+                            uint8_t Shift = (i - 1) * 2 + 2;
+
+                            Carry = (UTF32Ptr[i] & ((0x4 << i * 2) - 1) << OldShift) >> OldShift;
+                            UTF32Ptr[i] = ((UTF32Ptr[i] << Shift) & 0x3F) | OldCarry | ((i == Bytes) ? Header : 0x80);
+                        }
+                    }
+
+                    int Pos1 = Pos;
+
+                    str.erase(Pos, Len + 2);
+                    for (int i = Bytes + 1; i--;)
+                    {
+                        if(Pos1 >= str.size())
+                            str += UTF32Ptr[i];
+                        else
+                            str.insert(Pos1, std::string(1, UTF32Ptr[i]));
+
+                        Pos1++;
+                    }
+                }
+            }while (Pos != std::string::npos);
 
             return str;
         }
