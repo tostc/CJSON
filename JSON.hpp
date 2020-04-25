@@ -1356,8 +1356,15 @@ class CJSON
             Push(con, json.Deserialize<typename Container::value_type>(val));
         }
 
+        //For Strings
+        template<class Container, typename std::enable_if<std::is_same<typename Container::value_type, std::string>::value || has_push_back<typename Container::value_type>::value>::type * = nullptr>
+        inline void DeserializeObject(Container &con, const std::string &val)
+        {
+            Push(con, val);
+        }
+
         // Called if an array of objects is passed to a container type with primitive type.
-        template<class Container, typename std::enable_if<!std::is_class<typename std::remove_pointer<typename Container::value_type>::type>::value || std::is_same<typename Container::value_type, std::string>::value || has_push_back<typename Container::value_type>::value>::type * = nullptr>
+        template<class Container, typename std::enable_if<(!std::is_class<typename std::remove_pointer<typename Container::value_type>::type>::value || has_push_back<typename Container::value_type>::value) && !std::is_same<typename Container::value_type, std::string>::value>::type * = nullptr>
         inline void DeserializeObject(Container &con, const std::string &val)
         {
             throw CJSONException("Can't cast object to none object type", JSONErrorType::INVALID_CAST);
