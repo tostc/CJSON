@@ -86,8 +86,8 @@ class CJSON
         private:
             using Type = typename std::remove_pointer<T>::type;
 
-            template<class C> static auto Test(typename C::value_type *p) -> decltype(std::declval<C>().push_back(*p), std::true_type()) {}
-            template<class> static std::false_type Test(...) {}
+            template<class C> static auto Test(typename C::value_type *p) -> decltype(std::declval<C>().push_back(*p), std::true_type()) { return std::true_type(); }
+            template<class> static std::false_type Test(...) { return std::false_type(); }
         public:
             static const bool value = std::is_same<std::true_type, decltype(Test<Type>(nullptr))>::value;
     };
@@ -98,8 +98,8 @@ class CJSON
         private:
             using Type = typename std::remove_pointer<T>::type;
 
-            template<class C> static auto Test(typename C::value_type *p) -> decltype(std::declval<C>().push_front(*p), std::true_type()) {}
-            template<class> static std::false_type Test(...) {}
+            template<class C> static auto Test(typename C::value_type *p) -> decltype(std::declval<C>().push_front(*p), std::true_type()) { return std::true_type(); }
+            template<class> static std::false_type Test(...) { return std::false_type(); }
         public:
             static const bool value = std::is_same<std::true_type, decltype(Test<Type>(nullptr))>::value;
     };
@@ -110,11 +110,11 @@ class CJSON
         private:
             using Type = typename std::remove_pointer<T>::type;
 
-            template<class C> static auto TestBegin(typename C::const_iterator *) -> decltype(static_cast<typename C::const_iterator>(std::declval<C>().begin()), std::true_type())  {}
-            template<class> static std::false_type TestBegin(...) {}
+            template<class C> static auto TestBegin(typename C::const_iterator *) -> decltype(static_cast<typename C::const_iterator>(std::declval<C>().begin()), std::true_type())  { return std::true_type(); }
+            template<class> static std::false_type TestBegin(...) { return std::false_type(); }
 
-            template<class C> static auto TestEnd(typename C::const_iterator *) -> decltype(static_cast<typename C::const_iterator>(std::declval<C>().end()), std::true_type())  {}
-            template<class> static std::false_type TestEnd(...) {}
+            template<class C> static auto TestEnd(typename C::const_iterator *) -> decltype(static_cast<typename C::const_iterator>(std::declval<C>().end()), std::true_type())  { return std::true_type(); }
+            template<class> static std::false_type TestEnd(...) { return std::false_type(); }
         public:
             static const bool value = std::is_same<std::true_type, decltype(TestBegin<Type>(nullptr))>::value && std::is_same<std::true_type, decltype(TestEnd<Type>(nullptr))>::value;
     }; 
@@ -198,18 +198,7 @@ class CJSON
             m_Values.clear();
 
             obj.Serialize(*this);
-            std::string Ret;
-
-            for (auto &&e : m_Values)
-            {
-                if(!Ret.empty())
-                    Ret += ',';
-
-                Ret += '"' + e.first + "\":" + e.second;
-            }
-
-            m_Values.clear();
-            return '{' + Ret + '}';
+            return Serialize();
         }
 
         /**
@@ -260,6 +249,16 @@ class CJSON
             m_Values.clear();
 
             obj->Serialize(*this);
+            return Serialize();
+        }
+
+        /**
+         * @brief Serializes the data which was added without an object.
+         * 
+         * @return Returns a string which contains the json object.
+         */
+        inline std::string Serialize()
+        {
             std::string Ret;
 
             for (auto &&e : m_Values)
@@ -632,6 +631,7 @@ class CJSON
          * 
          * @param Name: Name of the value in the json file.
          * @param val: Value of the json value.
+         * @param IsObjectStr: Value is already an json object.
          * 
          * @note You can add any type. It can be primitive, pointer, object or container types. The object type need to implement the Serialize method.
          * @throw CJSONException If any error occurres.
@@ -643,6 +643,23 @@ class CJSON
                 throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);
 
             m_Values[Name] = ValueToString(val); 
+        }
+
+        /**
+         * @brief Adds a new value to the json.
+         * 
+         * @param Name: Name of the value in the json file.
+         * @param val: Value of the json value.
+         * 
+         * @note You can add any type. It can be primitive, pointer, object or container types. The object type need to implement the Serialize method.
+         * @throw CJSONException If any error occurres.
+         */
+        inline void AddJSON(const std::string &Name, const std::string &val)
+        {
+            if(m_Values.find(Name) != m_Values.end())
+                throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);
+
+            m_Values[Name] = val; 
         }
 
         /**
