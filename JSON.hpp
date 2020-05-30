@@ -1341,10 +1341,18 @@ class CJSON
         }
 
         // Called if a invalid cast occured
-        template<class T, typename std::enable_if<(std::is_class<T>::value && !std::is_same<T, std::string>::value && !has_push_back<T>::value && !has_push_front<T>::value) /*|| std::is_pointer<T>::value*/>::type* = nullptr>
+        template<class T, typename std::enable_if<(std::is_class<T>::value && !std::is_same<T, std::string>::value && !has_push_back<T>::value && !has_push_front<T>::value && !(is_map<T>::value || is_multimap<T>::value)) /*|| std::is_pointer<T>::value*/>::type* = nullptr>
         inline T ParseValue(const std::string &val)
         {
             throw CJSONException(JSONErrorType::INVALID_CAST);
+        }
+
+        //Called for maps
+        template<class T, typename std::enable_if<!is_pointer_type<T>::value && (is_map<T>::value || is_multimap<T>::value)>::type* = nullptr>
+        inline T ParseValue(const std::string &val)
+        {
+            CJSON json;
+            return json.Deserialize<T>(val);
         }
 
         // Converts a string to string. 
