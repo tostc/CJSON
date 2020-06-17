@@ -945,7 +945,7 @@ class CJSON
 
         inline std::string NumToHexStr(uint32_t Num)
         {
-            size_t Len = sizeof(uint32_t) * 2 + 1;
+            size_t Len = sizeof(uint32_t) + 1;
             char *Buf = new char[Len];
             Len = snprintf(Buf, Len, "%0*x", Len - 1, Num);
 
@@ -1050,7 +1050,7 @@ class CJSON
         {
             std::string Buf;
 
-            for (Len = 0; Len < sizeof(uint32_t) * 2; Len++)
+            for (Len = 0; Len < sizeof(uint32_t); Len++)
             {
                 if(!isxdigit(str[Pos]))
                     break;
