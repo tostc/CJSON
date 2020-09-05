@@ -53,6 +53,21 @@ enum class JSONErrorType
     MISSING_SEPERATOR       //!< Occurred if a ',' is missing before a key or ':' is missing before value.
 };
 
+/**
+ * @brief JSON value types.
+ */
+enum class JsonType
+{
+    UNKNOWN,
+    NIL,
+    OBJECT,
+    ARRAY,
+    BOOLEAN,
+    INTEGER,
+    DOUBLE,
+    STRING
+};
+
 class CJSONException : public std::exception
 {
     public:
@@ -679,6 +694,60 @@ class CJSON
                 throw CJSONException("Name '" + Name + "' already exists!", JSONErrorType::NAME_ALREADY_EXITS);         
 
             m_Values[Name] = '[' + ArrayToStr(val, Size) + ']'; 
+        }
+
+        /**
+         * @return Gets the type of the value.
+         */
+        inline JsonType GetType(const std::string &Key)
+        {
+            auto IT = m_Values.find(Key);
+            if(IT == m_Values.end())
+                throw CJSONException("Name '" + Key + "' not found", JSONErrorType::NAME_NOT_FOUND); 
+
+            if(IT->second == "null")
+                return JsonType::NIL;
+            else if(IT->second == "true" || IT->second == "false")
+                return JsonType::BOOLEAN;
+            else if(IT->second[0] == '{') //Quick and dirty check.
+                return JsonType::OBJECT;
+            else if(IT->second[0] == '[') //Quick and dirty check.
+                return JsonType::ARRAY;
+            else if(IT->second[0] == '\"') //Quick and dirty check.
+                return JsonType::STRING;
+            
+            if(IT->second.find("."))
+            {
+                try
+                {
+                    std::stod(IT->second); //Quick and dirty check.
+                    return JsonType::DOUBLE;
+                }
+                catch(const std::exception& e)
+                {
+                    return JsonType::UNKNOWN;
+                }
+            }
+            else
+            {
+                try
+                {
+                    std::stoi(IT->second); //Quick and dirty check.
+                    return JsonType::INTEGER;
+                }
+                catch(const std::exception& e)
+                {
+                    return JsonType::UNKNOWN;
+                }
+            }
+        }
+
+        /**
+         * @return Returns true if the given key exists.
+         */
+        inline bool HasKey(const std::string &Key)
+        {
+            return m_Values.find(Key) != m_Values.end();
         }
 
         /**
